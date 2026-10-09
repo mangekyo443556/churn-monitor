@@ -16,7 +16,7 @@
 
 [tool.poetry]
 name = "churn-monitor"
-version = "0.1.0"   # súbela en cada cambio (el deploy la usa como etiqueta)
+version = "0.1.1"   # súbela en cada cambio (el deploy la usa como etiqueta)
 description = "Mini monitor de drift para un modelo de churn. Proyecto de práctica que imita pipeline-model-monitor."
 authors = ["ml.jhoan443556@gmail.com"]
 readme = "README.md"
