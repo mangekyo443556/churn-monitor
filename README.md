@@ -1,8 +1,8 @@
 # churn-monitor
 
-Un mini monitor de drift para un modelo de churn, construido para **aprender paso a paso** las mismas piezas que usa `pipeline-model-monitor` en Vana: Poetry, `pyproject.toml`, YAML, tests, GitHub Actions, Docker, SAM, Step Functions y CodeArtifact.
+Un mini monitor de drift para un modelo de churn, construido para **aprender paso a paso** las mismas piezas que usa `pipeline-model-monitor` en X: Poetry, `pyproject.toml`, YAML, tests, GitHub Actions, Docker, SAM, Step Functions y CodeArtifact.
 
-Todo corre primero en tu máquina, y solo al final en **tu propia** cuenta de AWS. No toca nada de Vana.
+Todo corre primero en tu máquina, y solo al final en **tu propia** cuenta de AWS. No toca nada de X.
 
 ## Qué hace
 
@@ -89,10 +89,10 @@ churn-monitor/
 | `local_runs/run_pipeline.py` | `local_runs/*.py` |
 | `tests.yml` | `static-checks.yml` |
 | `deploy.yml` manual con OIDC | `deploy.yml` automático por rama con claves |
-| `nivel7-paquete-privado/churn-utils` | El paquete `vana` en CodeArtifact |
+| `nivel7-paquete-privado/churn-utils` | El paquete `X` en CodeArtifact |
 
 ## Datos
 
 Telco Customer Churn, publicado por IBM como dataset de ejemplo y difundido en Kaggle. `make data` lo baja de la [copia pública de IBM en GitHub](https://github.com/IBM/telco-customer-churn-on-icp4d), así no necesitas cuenta de Kaggle.
 
-Para un caso más cercano a Vana, con drift **real** en el tiempo en lugar de simulado, mira [docs/dataset-alternativo.md](docs/dataset-alternativo.md) (Lending Club).
+Para un caso más cercano a X, con drift **real** en el tiempo en lugar de simulado, mira [docs/dataset-alternativo.md](docs/dataset-alternativo.md) (Lending Club).
