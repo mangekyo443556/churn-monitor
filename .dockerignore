@@ -1,0 +1,13 @@
+# Lo que Docker NO copia al construir (más rápido y sin secretos)
+.venv/
+.local_bucket/
+.aws-sam/
+.git/
+.github/
+tests/
+docs/
+nivel0/
+nivel7-paquete-privado/
+**/__pycache__/
+*.pyc
+.env

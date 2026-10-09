@@ -1,0 +1,29 @@
+# =============================================================================
+# samconfig.toml — respuestas guardadas para los comandos de SAM (Nivel 5-6)
+#
+# Otro archivo TOML, pero este lo lee SAM (no Poetry). Guarda las opciones
+# que de otro modo tendrías que escribir en cada `sam deploy`.
+# `sam deploy --guided` lo crea/actualiza haciéndote preguntas.
+# =============================================================================
+version = 0.1
+
+[default.global.parameters]
+stack_name = "churn-monitor-dev"
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.validate.parameters]
+lint = true
+
+[default.deploy.parameters]
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM"     # SAM puede crear roles de IAM (los permisos de las Lambdas)
+confirm_changeset = true            # te muestra qué va a cambiar y pide "y" antes de aplicarlo
+resolve_s3 = true                   # SAM crea un bucket propio para sus archivos de despliegue
+resolve_image_repos = true          # SAM crea los repositorios de ECR para las imágenes
+parameter_overrides = "Environment=dev ScheduleState=DISABLED DriftScenario=price_increase"
+
+[default.local_invoke.parameters]
+skip_pull_image = false

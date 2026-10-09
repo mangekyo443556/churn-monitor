@@ -1,0 +1,6 @@
+{
+  "date": "2026-01-15",
+  "scenario": "price_increase",
+  "batch_key": "production/churn-v1/date=2026-01-15/batch.csv",
+  "rows": 1000
+}

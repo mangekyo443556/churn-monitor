@@ -1,0 +1,21 @@
+# =============================================================================
+# Un paquete (librería) propio, para publicar en un repositorio PRIVADO (Nivel 7)
+#
+# A diferencia del proyecto principal (package-mode = false), esto SÍ es una
+# librería: se "construye" en un archivo .whl y se publica en CodeArtifact.
+# Es lo que Vana hace con el paquete interno `vana`.
+# =============================================================================
+[tool.poetry]
+name = "churn-utils"
+version = "0.1.0"          # cada publicación necesita una versión nueva
+description = "Utilidades de drift compartidas (paquete de práctica)"
+authors = ["Tu Nombre <tu-correo@ejemplo.com>"]
+packages = [{ include = "churn_utils" }]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+numpy = ">=1.24"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

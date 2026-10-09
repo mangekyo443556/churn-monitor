@@ -1,0 +1,114 @@
+# =============================================================================
+# config/drifts.yaml — configuración del monitor (Nivel 2)
+#
+# Equivale a config/drifts.yaml de pipeline-model-monitor.
+# Cambiar valores aquí cambia el comportamiento SIN tocar código Python.
+# (En AWS hay que reconstruir la imagen, porque este archivo viaja dentro.)
+#
+# Recordatorio YAML: la indentación (espacios) define la jerarquía.
+# Nunca uses tabs.
+# =============================================================================
+
+model_name: churn-v1
+
+# -----------------------------------------------------------------------------
+# dataset: qué columnas usa el modelo.
+# Si cambias de dataset (ver docs/dataset-alternativo.md), casi todo el
+# cambio está en esta sección.
+# -----------------------------------------------------------------------------
+dataset:
+  raw_key: data/raw/telco.csv     # "llave" del archivo (ruta local o en S3)
+  id_column: customerID
+  target: Churn
+  positive_label: "Yes"           # valor de target que significa "se fue"
+  numeric_features:
+    - tenure                      # meses como cliente
+    - MonthlyCharges              # cargo mensual
+    - TotalCharges                # cargo acumulado
+  categorical_features:
+    - gender
+    - SeniorCitizen
+    - Partner
+    - Dependents
+    - PhoneService
+    - InternetService
+    - OnlineSecurity
+    - TechSupport
+    - Contract
+    - PaperlessBilling
+    - PaymentMethod
+
+# -----------------------------------------------------------------------------
+# drifts: qué análisis correr.
+#
+#   type: input   -> compara las FEATURES de entrenamiento vs producción
+#   type: output  -> compara los SCORES del modelo (entrenamiento vs producción)
+#
+#   numeric_algorithm      psi | ks | wasserstein | jensenshannon
+#   categorical_algorithm  psi | jensenshannon
+#   threshold              una feature se marca "drifted" si score >= threshold
+#   alert_share            (solo input) alerta si la fracción de features
+#                          drifted es >= alert_share
+#   enabled                false -> se salta sin tocar código
+#
+# En todos los algoritmos: 0 = distribuciones iguales, más alto = más drift.
+# Guía rápida de PSI: < 0.1 estable · 0.1–0.25 cambio moderado · > 0.25 fuerte
+# -----------------------------------------------------------------------------
+drifts:
+  - name: feature_drift
+    type: input
+    numeric_algorithm: psi
+    categorical_algorithm: jensenshannon
+    threshold: 0.2
+    alert_share: 0.05      # con 14 features, basta 1 con drift (1/14 = 0.07) para alertar
+    enabled: true
+
+  - name: target_drift
+    type: output
+    numeric_algorithm: psi
+    threshold: 0.2
+    enabled: true
+
+# -----------------------------------------------------------------------------
+# simulation: cómo fabricar datos de "producción".
+#
+# El dataset Telco no tiene fechas, así que simulamos producción tomando
+# filas que el modelo no vio (holdout) y deformándolas a propósito.
+#
+# Operaciones disponibles (se aplican en orden):
+#   oversample: arma el batch con `share` % de filas que cumplen la condición
+#               (condition: lt | gt | eq). Ponla PRIMERO.
+#   scale:      multiplica una columna numérica por `factor`.
+# -----------------------------------------------------------------------------
+simulation:
+  batch_size: 1000
+  default_scenario: price_increase
+  scenarios:
+    # Sin cambios: el drift debería salir bajo. Sirve de control.
+    none: []
+
+    # La empresa sube precios 25 %: drift en MonthlyCharges y TotalCharges.
+    price_increase:
+      - op: scale
+        column: MonthlyCharges
+        factor: 1.25
+      - op: scale
+        column: TotalCharges
+        factor: 1.25
+
+    # Campaña de captación: llegan muchos clientes nuevos.
+    # Cambia tenure Y también los scores (los nuevos se van más) -> target drift.
+    new_customers:
+      - op: oversample
+        column: tenure
+        condition: lt
+        value: 12
+        share: 0.7
+
+    # Casi todos en contrato mes a mes: drift categórico fuerte.
+    contract_shift:
+      - op: oversample
+        column: Contract
+        condition: eq
+        value: Month-to-month
+        share: 0.9

@@ -1,0 +1,18 @@
+# Entorno virtual de Poetry
+.venv/
+# Datos y resultados locales (el "bucket" de mentira)
+.local_bucket/
+# Lo genera `make export`; la fuente de verdad es poetry.lock
+requirements.txt
+# Salida de `sam build`
+.aws-sam/
+# Python
+__pycache__/
+*.pyc
+.coverage
+.mypy_cache/
+.pytest_cache/
+# Secretos: nunca al repo
+.env
+events/env.json
+nivel0/telco.csv

@@ -1,0 +1,155 @@
+{
+  "report": {
+    "model_name": "churn-v1",
+    "date": "2026-01-15",
+    "scenario": "price_increase",
+    "rows": 1000,
+    "alert": true,
+    "score_summary": {
+      "baseline_mean_score": 0.2658,
+      "current_mean_score": 0.3426
+    },
+    "drifts": [
+      {
+        "name": "feature_drift",
+        "type": "input",
+        "alert": true,
+        "share_drifted": 0.0714,
+        "drifted_features": [
+          "MonthlyCharges"
+        ],
+        "features": [
+          {
+            "feature": "tenure",
+            "kind": "numeric",
+            "algorithm": "psi",
+            "score": 0.0064,
+            "threshold": 0.2,
+            "drifted": false
+          },
+          {
+            "feature": "MonthlyCharges",
+            "kind": "numeric",
+            "algorithm": "psi",
+            "score": 1.512,
+            "threshold": 0.2,
+            "drifted": true
+          },
+          {
+            "feature": "TotalCharges",
+            "kind": "numeric",
+            "algorithm": "psi",
+            "score": 0.0715,
+            "threshold": 0.2,
+            "drifted": false
+          },
+          {
+            "feature": "gender",
+            "kind": "categorical",
+            "algorithm": "jensenshannon",
+            "score": 0.0046,
+            "threshold": 0.2,
+            "drifted": false
+          },
+          {
+            "feature": "SeniorCitizen",
+            "kind": "categorical",
+            "algorithm": "jensenshannon",
+            "score": 0.0096,
+            "threshold": 0.2,
+            "drifted": false
+          },
+          {
+            "feature": "Partner",
+            "kind": "categorical",
+            "algorithm": "jensenshannon",
+            "score": 0.0122,
+            "threshold": 0.2,
+            "drifted": false
+          },
+          {
+            "feature": "Dependents",
+            "kind": "categorical",
+            "algorithm": "jensenshannon",
+            "score": 0.003,
+            "threshold": 0.2,
+            "drifted": false
+          },
+          {
+            "feature": "PhoneService",
+            "kind": "categorical",
+            "algorithm": "jensenshannon",
+            "score": 0.0071,
+            "threshold": 0.2,
+            "drifted": false
+          },
+          {
+            "feature": "InternetService",
+            "kind": "categorical",
+            "algorithm": "jensenshannon",
+            "score": 0.0165,
+            "threshold": 0.2,
+            "drifted": false
+          },
+          {
+            "feature": "OnlineSecurity",
+            "kind": "categorical",
+            "algorithm": "jensenshannon",
+            "score": 0.0198,
+            "threshold": 0.2,
+            "drifted": false
+          },
+          {
+            "feature": "TechSupport",
+            "kind": "categorical",
+            "algorithm": "jensenshannon",
+            "score": 0.0219,
+            "threshold": 0.2,
+            "drifted": false
+          },
+          {
+            "feature": "Contract",
+            "kind": "categorical",
+            "algorithm": "jensenshannon",
+            "score": 0.0178,
+            "threshold": 0.2,
+            "drifted": false
+          },
+          {
+            "feature": "PaperlessBilling",
+            "kind": "categorical",
+            "algorithm": "jensenshannon",
+            "score": 0.0077,
+            "threshold": 0.2,
+            "drifted": false
+          },
+          {
+            "feature": "PaymentMethod",
+            "kind": "categorical",
+            "algorithm": "jensenshannon",
+            "score": 0.0174,
+            "threshold": 0.2,
+            "drifted": false
+          }
+        ]
+      },
+      {
+        "name": "target_drift",
+        "type": "output",
+        "alert": false,
+        "share_drifted": 0.0,
+        "drifted_features": [],
+        "features": [
+          {
+            "feature": "score",
+            "kind": "numeric",
+            "algorithm": "psi",
+            "score": 0.1056,
+            "threshold": 0.2,
+            "drifted": false
+          }
+        ]
+      }
+    ]
+  }
+}

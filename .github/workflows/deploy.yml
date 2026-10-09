@@ -1,0 +1,68 @@
+# =============================================================================
+# deploy.yml — despliega en TU cuenta de AWS (Nivel 6)
+#
+# Equivale a deploy.yml de pipeline-model-monitor, con dos diferencias a propósito:
+#   1. Se dispara A MANO (workflow_dispatch), no con cada push. Para aprender,
+#      es más seguro decidir tú cuándo se despliega.
+#   2. Usa OIDC en vez de claves guardadas: GitHub le pide a AWS credenciales
+#      temporales para cada ejecución. Es la práctica recomendada hoy.
+#      (Vana guarda claves de acceso como secrets; ver docs/nivel-6.md.)
+#
+# Secrets que tienes que crear en GitHub (Settings -> Secrets -> Actions):
+#   AWS_DEPLOY_ROLE_ARN   el rol de IAM que GitHub puede asumir
+#   SLACK_WEBHOOK_URL     opcional
+# =============================================================================
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      schedule_state:
+        description: "¿Encender el horario diario?"
+        type: choice
+        options: [DISABLED, ENABLED]
+        default: DISABLED
+
+permissions:
+  id-token: write     # necesario para OIDC
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10.12"
+
+      - name: Instalar Poetry y SAM
+        run: pip install poetry==1.8.4 aws-sam-cli
+
+      - name: Credenciales de AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Tests antes de desplegar
+        run: |
+          poetry config virtualenvs.in-project true
+          poetry check --lock
+          poetry install
+          make ci
+
+      - name: Construir (poetry export + sam build)
+        run: make build
+
+      - name: Desplegar
+        run: |
+          sam deploy \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              Environment=dev \
+              Version=$(poetry version -s) \
+              ScheduleState=${{ inputs.schedule_state }} \
+              SlackWebhookUrl="${{ secrets.SLACK_WEBHOOK_URL }}"

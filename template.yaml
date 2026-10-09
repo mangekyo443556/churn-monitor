@@ -1,0 +1,231 @@
+# =============================================================================
+# template.yaml — TODA la infraestructura en AWS, escrita como texto (Nivel 5-6)
+#
+# Lo lee SAM (sam build / sam deploy), que lo traduce a CloudFormation.
+# Equivale al template.yaml de pipeline-model-monitor, en pequeño:
+#
+#   EventBridge (horario) ──► Step Function ──► SimulateProduction (Lambda)
+#                                          ──► ProcessDrift       (Lambda)
+#                                          ──► Notify             (Lambda) ──► Slack
+#   Todas leen y escriben en un bucket S3.   TrainModel se corre a mano.
+#
+# Cada bloque bajo "Resources" es una cosa que va a existir en AWS.
+# "Type" dice qué tipo de cosa es.
+# =============================================================================
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: churn-monitor - mini monitor de drift (proyecto de practica)
+
+# -----------------------------------------------------------------------------
+# Parameters: valores que eliges al desplegar, sin editar este archivo.
+# Se pasan con --parameter-overrides o se guardan en samconfig.toml.
+# -----------------------------------------------------------------------------
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, prod]
+    Description: Entorno. Permite tener dos copias del stack con el mismo template.
+  Version:
+    Type: String
+    Default: "0.0.0"
+    Description: Version del proyecto (sale de pyproject.toml). Solo informativa.
+  SlackWebhookUrl:
+    Type: String
+    Default: ""
+    NoEcho: true      # no se muestra en la consola ni en los logs de despliegue
+    Description: URL del webhook de Slack. Vacia = no envia nada (dry run).
+  DriftScenario:
+    Type: String
+    Default: price_increase
+    AllowedValues: [none, price_increase, new_customers, contract_shift]
+    Description: Escenario que simula la ejecucion programada.
+  ScheduleState:
+    Type: String
+    Default: DISABLED
+    AllowedValues: [ENABLED, DISABLED]
+    Description: El horario diario arranca APAGADO. Encendelo cuando todo funcione.
+
+# -----------------------------------------------------------------------------
+# Globals: valores comunes a todas las funciones (para no repetirlos).
+# -----------------------------------------------------------------------------
+Globals:
+  Function:
+    Architectures: [x86_64]
+    Timeout: 120          # segundos
+    MemorySize: 1024      # MB
+    Environment:
+      Variables:
+        STORAGE: s3
+        DATA_BUCKET: !Ref DataBucket
+        ENVIRONMENT: !Ref Environment
+        APP_VERSION: !Ref Version
+    Tags:
+      project: churn-monitor
+      environment: !Ref Environment
+
+Resources:
+  # ---------------------------------------------------------------------------
+  # Bucket S3: el "disco" del proyecto. Reemplaza a la carpeta .local_bucket/
+  # ---------------------------------------------------------------------------
+  DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:      # nada de esto es publico
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:              # borra batches y reportes viejos (ahorra)
+        Rules:
+          - Id: expire-production
+            Prefix: production/
+            Status: Enabled
+            ExpirationInDays: 30
+          - Id: expire-reports
+            Prefix: reports/
+            Status: Enabled
+            ExpirationInDays: 30
+
+  # ---------------------------------------------------------------------------
+  # Lambdas: las 4 usan la MISMA imagen (Dockerfile). Cambia el Command.
+  # El bloque Metadata le dice a `sam build` como construir la imagen.
+  # ---------------------------------------------------------------------------
+  TrainModelFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub churn-monitor-train-${Environment}
+      Description: Entrena el modelo y guarda baseline + holdout (se corre a mano)
+      MemorySize: 2048
+      Timeout: 300
+      PackageType: Image   # la funcion viene en una imagen Docker, no en un .zip
+      ImageConfig:
+        Command: ["train_model.main.handler"]
+      Policies:
+        - S3CrudPolicy:                    # permiso: leer y escribir SOLO este bucket
+            BucketName: !Ref DataBucket
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: .
+      DockerTag: python3.10-v1
+
+  SimulateProductionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub churn-monitor-simulate-${Environment}
+      Description: Genera el batch de produccion del dia con un escenario de drift
+      PackageType: Image   # la funcion viene en una imagen Docker, no en un .zip
+      ImageConfig:
+        Command: ["simulate_production.main.handler"]
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref DataBucket
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: .
+      DockerTag: python3.10-v1
+
+  ProcessDriftFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub churn-monitor-process-drift-${Environment}
+      Description: Compara baseline vs produccion y guarda el reporte de drift
+      MemorySize: 2048
+      PackageType: Image   # la funcion viene en una imagen Docker, no en un .zip
+      ImageConfig:
+        Command: ["process_drift.main.handler"]
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref DataBucket
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: .
+      DockerTag: python3.10-v1
+
+  NotifyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub churn-monitor-notify-${Environment}
+      Description: Publica el resumen del reporte en Slack
+      MemorySize: 512
+      PackageType: Image   # la funcion viene en una imagen Docker, no en un .zip
+      ImageConfig:
+        Command: ["notify.main.handler"]
+      Environment:
+        Variables:
+          SLACK_WEBHOOK_URL: !Ref SlackWebhookUrl
+          NOTIFY_ONLY_ON_ALERT: "false"
+      Policies:
+        - S3ReadPolicy:                    # esta solo necesita leer
+            BucketName: !Ref DataBucket
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: .
+      DockerTag: python3.10-v1
+
+  # ---------------------------------------------------------------------------
+  # Step Function: el "director de orquesta". Llama a las Lambdas en orden y
+  # pasa la salida de cada una como entrada de la siguiente.
+  # ---------------------------------------------------------------------------
+  MonitorStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub churn-monitor-${Environment}
+      Definition:
+        Comment: Monitoreo diario - simular produccion, calcular drift, notificar
+        StartAt: SimulateProduction
+        States:
+          SimulateProduction:
+            Type: Task
+            Resource: "${SimulateFunctionArn}"
+            Retry:
+              - ErrorEquals: [Lambda.ServiceException, Lambda.TooManyRequestsException]
+                IntervalSeconds: 10
+                MaxAttempts: 2
+                BackoffRate: 2.0
+            Next: ProcessDrift
+          ProcessDrift:
+            Type: Task
+            Resource: "${ProcessDriftFunctionArn}"
+            Retry:
+              - ErrorEquals: [Lambda.ServiceException, Lambda.TooManyRequestsException]
+                IntervalSeconds: 10
+                MaxAttempts: 2
+                BackoffRate: 2.0
+            Next: Notify
+          Notify:
+            Type: Task
+            Resource: "${NotifyFunctionArn}"
+            End: true
+      DefinitionSubstitutions:              # reemplaza los ${...} de arriba por los ARN reales
+        SimulateFunctionArn: !GetAtt SimulateProductionFunction.Arn
+        ProcessDriftFunctionArn: !GetAtt ProcessDriftFunction.Arn
+        NotifyFunctionArn: !GetAtt NotifyFunction.Arn
+      Policies:                             # permiso para invocar SOLO estas Lambdas
+        - LambdaInvokePolicy:
+            FunctionName: !Ref SimulateProductionFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref ProcessDriftFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref NotifyFunction
+      Events:
+        DailySchedule:                      # el "despertador" (EventBridge)
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 13 * * ? *)    # 13:00 UTC = 9:00 en Bolivia
+            State: !Ref ScheduleState
+            Input: !Sub '{"scenario": "${DriftScenario}"}'
+
+# -----------------------------------------------------------------------------
+# Outputs: datos útiles que el stack "devuelve" al terminar el deploy.
+# El Makefile los lee con local_runs/stack_output.sh
+# -----------------------------------------------------------------------------
+Outputs:
+  DataBucketName:
+    Description: Bucket donde viven datos, modelo y reportes
+    Value: !Ref DataBucket
+  StateMachineArn:
+    Description: ARN de la Step Function (para lanzarla a mano)
+    Value: !Ref MonitorStateMachine
+  TrainModelFunctionName:
+    Value: !Ref TrainModelFunction

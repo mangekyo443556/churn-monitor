@@ -1,0 +1,42 @@
+# =============================================================================
+# tests.yml — corre los chequeos en cada pull request (Nivel 3)
+#
+# Lo lee GitHub Actions. Equivale a static-checks.yml de pipeline-model-monitor.
+# No necesita AWS: los tests usan datos sintéticos y moto.
+# =============================================================================
+name: tests
+
+on:
+  pull_request:                 # cada PR, hacia cualquier rama
+  push:
+    branches: [main]            # y cada vez que algo llega a main
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bajar el código
+        uses: actions/checkout@v4
+
+      - name: Instalar Python 3.10.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10.12"
+
+      - name: Instalar Poetry 1.8.4
+        run: pip install poetry==1.8.4
+
+      - name: Instalar dependencias (exactas, desde poetry.lock)
+        run: |
+          poetry config virtualenvs.in-project true
+          poetry check --lock
+          poetry install
+
+      - name: Revisión de tipos (mypy)
+        run: make check
+
+      - name: Tests con cobertura
+        run: make test
